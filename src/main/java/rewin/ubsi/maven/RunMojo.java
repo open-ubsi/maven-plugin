@@ -1,4 +1,4 @@
-package com.rewin;
+package rewin.ubsi.maven;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -16,7 +16,7 @@ import java.nio.file.Files;
 import java.util.*;
 
 /**
- * 启动容器并加载指定的微服务/过滤器
+ * 启动容器并加载指定的微服务/过滤器：mvn ubsi:run
  */
 @Mojo(
         name = RunMojo.GOAL,
@@ -49,7 +49,7 @@ public class RunMojo extends AbstractUbsiMojo {
         lib.artifactId = artifact.getArtifactId();
         lib.version = artifact.getVersion();
         if ( file )
-            lib.jarFile = checkArtifact(artifact).getName();
+            lib.jarFile = checkArtifact(artifact, GOAL).getName();
         return lib;
     }
 
@@ -87,8 +87,7 @@ public class RunMojo extends AbstractUbsiMojo {
     }
 
     public void execute() throws MojoExecutionException {
-        goal = GOAL;
-        File jarFile = prepare();   // 获取Project的JAR包
+        prepare(GOAL);
 
         // 处理依赖的JAR包
         List<Info.Lib> libs = new ArrayList<>();
@@ -126,7 +125,7 @@ public class RunMojo extends AbstractUbsiMojo {
             Util.rmdir(sysDir);
             sysDir.mkdir();
             for ( Artifact artifact : artifacts ) {
-                File file = checkArtifact(artifact);
+                File file = checkArtifact(artifact, GOAL);
                 if ( isSysLib(artifact.getGroupId(), artifact.getArtifactId()) )
                     Files.copy(file.toPath(), new File(sysDir, file.getName()).toPath());
                 else
@@ -229,7 +228,7 @@ public class RunMojo extends AbstractUbsiMojo {
         try {
             port = Integer.valueOf(s.substring(index + 1, tail));
         } catch (Exception e) {
-            getLog().error("====== container-port invalid! ======");
+            getLog().error("====== invalid container's port! ======");
             return;
         }
 

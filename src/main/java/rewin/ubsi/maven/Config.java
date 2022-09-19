@@ -1,4 +1,4 @@
-package com.rewin;
+package rewin.ubsi.maven;
 
 /** 插件的配置参数 */
 public class Config {

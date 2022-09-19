@@ -83,14 +83,9 @@
 
   <distributionManagement>
     <repository>
-      <id>nexus-release</id>
-      <name>release</name>
-      <url>http://192.168.1.116:8081/repository/maven-releases</url>
+      <id>github</id>
+      <name>github packages</name>
+      <url>https://maven.pkg.github.com/ubsi-home/release</url>
     </repository>
-    <snapshotRepository>
-      <id>nexus-snapshot</id>
-      <name>snapshot</name>
-      <url>http://192.168.1.116:8081/repository/maven-snapshots</url>
-    </snapshotRepository>
   </distributionManagement>
 </project>

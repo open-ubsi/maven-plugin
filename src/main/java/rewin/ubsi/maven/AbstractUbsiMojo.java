@@ -1,4 +1,4 @@
-package com.rewin;
+package rewin.ubsi.maven;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.repository.ArtifactRepository;
@@ -79,10 +79,10 @@ public abstract class AbstractUbsiMojo extends AbstractMojo {
                     list.remove(i);
     }
 
-    protected String goal = "unknown";
+    protected File jarFile;     // 项目的打包文件
 
     /** 准备处理 */
-    protected File prepare() throws MojoExecutionException {
+    protected void prepare(String goal) throws MojoExecutionException {
         exclusion(services);
         exclusion(filters);
         if ( (services == null || services.isEmpty()) && (filters == null || filters.isEmpty()) )
@@ -105,14 +105,13 @@ public abstract class AbstractUbsiMojo extends AbstractMojo {
                     "  </filter>\n" +
                     "</filters>");
 
-        File file = getJarFile();
-        if ( file == null )
+        jarFile = getJarFile();
+        if ( jarFile == null )
             throw new MojoExecutionException(getJarFileName() + " not found! please retry with \"mvn install ubsi:" + goal + "\".");
-        return file;
     }
 
     /** 检查JAR包 */
-    protected File checkArtifact(Artifact artifact) throws MojoExecutionException {
+    protected File checkArtifact(Artifact artifact, String goal) throws MojoExecutionException {
         File file = artifact.getFile();
         if ( !checkFile(file) )
             throw new MojoExecutionException(artifact.getArtifactId() + "-" + artifact.getVersion() + " jar file not found! please retry with \"mvn install ubsi:" + goal + "\".");
