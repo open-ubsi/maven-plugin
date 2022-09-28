@@ -2,6 +2,8 @@ package rewin.ubsi.maven;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugins.annotations.Execute;
+import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import rewin.ubsi.common.Util;
@@ -19,12 +21,11 @@ import java.util.*;
  * 启动容器并加载指定的微服务/过滤器：mvn ubsi:run
  */
 @Mojo(
-        name = RunMojo.GOAL,
+        name = "run",
         requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME
 )
+@Execute(phase = LifecyclePhase.PACKAGE)
 public class RunMojo extends AbstractUbsiMojo {
-
-    final static String GOAL = "run";
 
     final static String MODULE_FILE = "rewin.ubsi.module.json";     // 容器加载的模块
     final static String MODULE_PATH = "rewin.ubsi.modules";         // 模块运行目录
@@ -49,7 +50,7 @@ public class RunMojo extends AbstractUbsiMojo {
         lib.artifactId = artifact.getArtifactId();
         lib.version = artifact.getVersion();
         if ( file )
-            lib.jarFile = checkArtifact(artifact, GOAL).getName();
+            lib.jarFile = checkArtifact(artifact).getName();
         return lib;
     }
 
@@ -87,7 +88,7 @@ public class RunMojo extends AbstractUbsiMojo {
     }
 
     public void execute() throws MojoExecutionException {
-        prepare(GOAL);
+        prepare();
 
         // 处理依赖的JAR包
         List<Info.Lib> libs = new ArrayList<>();
@@ -125,7 +126,7 @@ public class RunMojo extends AbstractUbsiMojo {
             Util.rmdir(sysDir);
             sysDir.mkdir();
             for ( Artifact artifact : artifacts ) {
-                File file = checkArtifact(artifact, GOAL);
+                File file = checkArtifact(artifact);
                 if ( isSysLib(artifact.getGroupId(), artifact.getArtifactId()) )
                     Files.copy(file.toPath(), new File(sysDir, file.getName()).toPath());
                 else

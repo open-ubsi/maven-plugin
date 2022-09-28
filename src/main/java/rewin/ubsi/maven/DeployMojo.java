@@ -2,9 +2,7 @@ package rewin.ubsi.maven;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugins.annotations.Mojo;
-import org.apache.maven.plugins.annotations.Parameter;
-import org.apache.maven.plugins.annotations.ResolutionScope;
+import org.apache.maven.plugins.annotations.*;
 import rewin.ubsi.common.Codec;
 import rewin.ubsi.common.Util;
 import rewin.ubsi.consumer.Context;
@@ -19,12 +17,11 @@ import java.util.List;
  * 部署微服务/过滤器到指定的容器：mvn ubsi:deploy -Dcontainer={host#port}
  */
 @Mojo(
-        name = DeployMojo.GOAL,
+        name = "deploy",
         requiresDependencyResolution = ResolutionScope.RUNTIME
 )
+@Execute(phase = LifecyclePhase.PACKAGE)
 public class DeployMojo extends AbstractUbsiMojo {
-
-    final static String GOAL = "deploy";
 
     @Parameter( defaultValue = "${project.groupId}", required = true, readonly = true )
     private String groupId;
@@ -43,7 +40,7 @@ public class DeployMojo extends AbstractUbsiMojo {
     int port = 7112;
 
     public void execute() throws MojoExecutionException {
-        prepare(GOAL);
+        prepare();
 
         container = Util.checkEmpty(container);
         if ( container != null ) {
@@ -106,7 +103,7 @@ public class DeployMojo extends AbstractUbsiMojo {
         // 安装依赖的JAR包
         List<Object[]> depends = new ArrayList<>();
         for ( Artifact artifact : project.getArtifacts() ) {
-            File file = checkArtifact(artifact, GOAL);
+            File file = checkArtifact(artifact);
             String gid = artifact.getGroupId();
             String aid = artifact.getArtifactId();
             String ver = artifact.getBaseVersion();
@@ -117,7 +114,6 @@ public class DeployMojo extends AbstractUbsiMojo {
         }
         // 安装主JAR包
         installJar(groupId, artifactId, version, jarFile, depends.toArray());
-
 
         uploadResource(mname, module.resourcePath);
         getLog().info("register " + mname + " ...");

@@ -82,7 +82,7 @@ public abstract class AbstractUbsiMojo extends AbstractMojo {
     protected File jarFile;     // 项目的打包文件
 
     /** 准备处理 */
-    protected void prepare(String goal) throws MojoExecutionException {
+    protected void prepare() throws MojoExecutionException {
         exclusion(services);
         exclusion(filters);
         if ( (services == null || services.isEmpty()) && (filters == null || filters.isEmpty()) )
@@ -107,14 +107,14 @@ public abstract class AbstractUbsiMojo extends AbstractMojo {
 
         jarFile = getJarFile();
         if ( jarFile == null )
-            throw new MojoExecutionException(getJarFileName() + " not found! please retry with \"mvn install ubsi:" + goal + "\".");
+            throw new MojoExecutionException(getJarFileName() + " not found!");
     }
 
     /** 检查JAR包 */
-    protected File checkArtifact(Artifact artifact, String goal) throws MojoExecutionException {
+    protected File checkArtifact(Artifact artifact) throws MojoExecutionException {
         File file = artifact.getFile();
         if ( !checkFile(file) )
-            throw new MojoExecutionException(artifact.getArtifactId() + "-" + artifact.getVersion() + " jar file not found! please retry with \"mvn install ubsi:" + goal + "\".");
+            throw new MojoExecutionException(artifact.getArtifactId() + "-" + artifact.getVersion() + " jar file not found!");
         return file;
     }
 
