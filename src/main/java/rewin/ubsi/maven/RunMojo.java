@@ -191,8 +191,12 @@ public class RunMojo extends AbstractUbsiMojo {
         }).start();
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {     // JVM退出时的Hook
-            if ( process.isAlive() )
+            if ( process.isAlive() ) {
                 process.destroyForcibly();
+                while ( process.isAlive() )
+                    try { Thread.sleep(100); } catch (Exception e) {}
+            }
+            clearRun();
             if ( status == 0 )
                 System.out.println("\n====== ubsi-container not start ======\n");
             else
@@ -200,17 +204,26 @@ public class RunMojo extends AbstractUbsiMojo {
         }));
 
         try { process.waitFor(); } catch (Exception e) {}
+        clearRun();
         throw new MojoExecutionException("ubsi-container start error!");
+    }
+
+    // 容器退出后，清理生成的目录及文件
+    void clearRun() {
+        try { Util.rmdir(new File(LIB_PATH)); } catch (Exception e) {}
+        try { Util.rmdir(new File(SYS_PATH)); } catch (Exception e) {}
+        try { new File(LIB_FILE).deleteOnExit(); } catch (Exception e) {}
     }
 
     Process process;    // 容器的运行进程
     int status = 0;     // 容器是否已经启动
     int port = 7112;    // 容器的监听端口
 
+    // 检查ubsi-contianer的日志输出，获得监听端口
     void checkOutput(String s) {
         if ( status > 0 )
             return;
-        if ( !s.matches("^\\[INFO\\].*rewin\\.ubsi\\.container\\.Bootstrap#start\\(\\)#[0-9]*.*startup.*$") )
+        if ( !s.matches("^\\[INFO].*rewin\\.ubsi\\.container\\.Bootstrap#start\\(\\)#[0-9]*.*startup.*$") )
             return;
 
         status = 1;
@@ -227,7 +240,7 @@ public class RunMojo extends AbstractUbsiMojo {
             }
         }
         try {
-            port = Integer.valueOf(s.substring(index + 1, tail));
+            port = Integer.parseInt(s.substring(index + 1, tail));
         } catch (Exception e) {
             getLog().error("====== invalid container's port! ======");
             return;
