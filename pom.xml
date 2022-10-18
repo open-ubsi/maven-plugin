@@ -23,8 +23,13 @@
   <description>UBSI-Maven插件，用于部署/运行微服务</description>
 
   <!--
-      1.0.0   2022/09/13
-          ~   初始创建
+UBSI-Maven插件，用于部署/运行微服务
+===
+版本更新说明：
+```
+1.0.0   2022/09/13
+    ~   初始创建
+```
   -->
 
   <dependencies>
@@ -85,7 +90,7 @@
     <repository>
       <id>github</id>
       <name>github packages</name>
-      <url>https://maven.pkg.github.com/ubsi-home/release</url>
+      <url>https://maven.pkg.github.com/open-ubsi/release</url>
     </repository>
   </distributionManagement>
 </project>
