@@ -186,7 +186,7 @@ public class RunMojo extends AbstractUbsiMojo {
                     checkOutput(s);
                 }
             } catch (IOException e) {
-                getLog().error("====== container-output error, " + e + " ======");
+                System.out.println("====== container-output error, " + e + " ======");
             }
         }).start();
 
@@ -242,9 +242,11 @@ public class RunMojo extends AbstractUbsiMojo {
         try {
             port = Integer.parseInt(s.substring(index + 1, tail));
         } catch (Exception e) {
-            getLog().error("====== invalid container's port! ======");
+            System.out.println("====== invalid container's port! ======");
             return;
         }
+
+        System.out.println("====== ubsi-container started, waiting for " + configMap.keySet() + " to config ======");
 
         try {
             Context.startup(".");
@@ -253,9 +255,11 @@ public class RunMojo extends AbstractUbsiMojo {
                 Context.request("", "setStatus", name, 1).direct("localhost", port);
             }
         } catch (Exception e) {
-            getLog().error("====== set configuration error, " + e + " ======");
+            System.out.println("====== config error, " + e + " ======");
         }
         try { Context.shutdown(); } catch (Exception e) {}
+
+        System.out.println("====== " + configMap.keySet() + " config and start over ======");
     }
 
 }
