@@ -73,8 +73,9 @@ public class DeployMojo extends AbstractUbsiMojo {
             }
         } catch (Exception e) {
             throw new MojoExecutionException("deploy error, " + e);
+        } finally {
+            try { Context.shutdown(); } catch (Exception e) {}
         }
-        try { Context.shutdown(); } catch (Exception e) {}
         getLog().info("");
     }
 
@@ -96,8 +97,10 @@ public class DeployMojo extends AbstractUbsiMojo {
             has = true;
         String mname = name == null ? module.className : name;
         if ( has ) {
-            getLog().info(mname + " founded, uninstall ...");
-            Context.request("", "uninstall", mname).direct(host, port);
+            getLog().info("\"" + mname + "\" founded, uninstall ...");
+            Integer res = (Integer)Context.request("", "uninstall", mname).direct(host, port);
+            if ( res != null && res != 0 )
+                throw new Exception(jarFile.getName() + " still in use by other service/filter");
         }
 
         // 安装依赖的JAR包
@@ -116,7 +119,7 @@ public class DeployMojo extends AbstractUbsiMojo {
         installJar(groupId, artifactId, version, jarFile, depends.toArray());
 
         uploadResource(mname, module.resourcePath);
-        getLog().info("register " + mname + " ...");
+        getLog().info("register \"" + mname + "\" ...");
         try {
             Context.request("", "install", name, module.className, new Object[]{groupId, artifactId, version}).direct(host, port);
         } catch (Exception e) {
@@ -128,12 +131,12 @@ public class DeployMojo extends AbstractUbsiMojo {
         }
 
         setConfig(mname, module.configJson);
-        getLog().info("start " + mname + " ...");
+        getLog().info("start \"" + mname + "\" ...");
         boolean res_start = (Boolean)Context.request("", "setStatus", mname, 1).direct(host, port);
         if ( !res_start )
-            getLog().warn("start " + mname + " failure!");
+            getLog().warn("start \"" + mname + "\" failure!");
         else
-            getLog().info("start " + mname + " ok, deploy over.");
+            getLog().info("start \"" + mname + "\" ok, deploy over.");
     }
 
     /* 安装一个JAR包 */
