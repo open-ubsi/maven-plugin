@@ -2,10 +2,7 @@ package rewin.ubsi.maven;
 
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugins.annotations.Execute;
-import org.apache.maven.plugins.annotations.LifecyclePhase;
-import org.apache.maven.plugins.annotations.Mojo;
-import org.apache.maven.plugins.annotations.ResolutionScope;
+import org.apache.maven.plugins.annotations.*;
 import rewin.ubsi.common.Util;
 import rewin.ubsi.consumer.Context;
 import rewin.ubsi.container.Info;
@@ -18,7 +15,7 @@ import java.nio.file.Files;
 import java.util.*;
 
 /**
- * 启动容器并加载指定的微服务/过滤器：mvn ubsi:run
+ * 启动容器并加载指定的微服务/过滤器：mvn ubsi:run -Dport={端口号} -Ddir={目标目录} -Dclass={微服务/过滤器的className}
  */
 @Mojo(
         name = "run",
@@ -27,34 +24,55 @@ import java.util.*;
 @Execute(phase = LifecyclePhase.PACKAGE)
 public class RunMojo extends AbstractUbsiMojo {
 
-    final static String MODULE_FILE = "rewin.ubsi.module.json";     // 容器加载的模块
-    final static String MODULE_PATH = "rewin.ubsi.modules";         // 模块运行目录
-    final static String LIB_FILE = "rewin.ubsi.lib.json";           // JAR包之间的依赖关系
-    final static String LIB_PATH = "rewin.ubsi.libs";               // JAR包所在目录
-    final static String SYS_PATH = "maven-run-libs";                // 容器运行时的JAR包所在目录
+    private final static String MODULE_FILE = "rewin.ubsi.module.json";     // 容器加载的模块
+    private final static String MODULE_PATH = "rewin.ubsi.modules";         // 模块运行目录
+    private final static String LIB_FILE = "rewin.ubsi.lib.json";           // JAR包之间的依赖关系
+    private final static String LIB_PATH = "rewin.ubsi.libs";               // JAR包所在目录
+    private final static String SYS_PATH = "core-libs";                     // 容器运行时的JAR包所在目录
+    private final static String RUN_PATH = "maven-run";                     // 容器运行目录
 
-    static class Module {
+    private final static String CONSUMER_FILE = "rewin.ubsi.consumer.json";
+    private final static String ROUTER_FILE = "rewin.ubsi.router.json";
+    private final static String LOG_FILE = "rewin.ubsi.log.json";
+    private final static String CONTAINER_FILE = "rewin.ubsi.container.json";
+    private final static String ACL_FILE = "rewin.ubsi.acl.json";
+
+    private static class Module {
         public String   class_name;         // Java类名字
         public Info.GAV jar_lib;            // 依赖的JAR包
         public boolean  startup = false;    // 是否启动
     }
 
-    static class Modules {
+    private static class Modules {
         public  Map<String, Module> services;   // 服务
         public  List<Module>        filters;    // 过滤器
     }
 
-    Info.Lib artifact2Lib(Artifact artifact, boolean file) throws MojoExecutionException {
+    /* 容器监听端口，可以在配置文件rewin.ubsi.container.json中设置，也可以使用 -Dport={xxx} 来指定 */
+    @Parameter( property = "port", defaultValue = "0")
+    private int port = 0;       // 容器的监听端口
+
+    /* 容器运行目录，可以使用 -Ddir={xxx} 来指定 */
+    @Parameter( property = "dir", defaultValue = RUN_PATH)
+    private String dir;         // 容器的运行目录
+
+    private Map<String,String> configMap = new HashMap<>();     // 有配置参数的服务/过滤器
+    private Process process;    // 容器的运行进程
+    private int status = 0;     // 容器是否已经启动
+
+    // 转换数据结构
+    private Info.Lib artifact2Lib(Artifact artifact, File jar) throws MojoExecutionException {
         Info.Lib lib = new Info.Lib();
         lib.groupId = artifact.getGroupId();
         lib.artifactId = artifact.getArtifactId();
         lib.version = artifact.getVersion();
-        if ( file )
-            lib.jarFile = checkArtifact(artifact).getName();
+        if ( jar != null )
+            lib.jarFile = jar.getName();
         return lib;
     }
 
-    void copyDir(File srcDir, File destDir) throws Exception {
+    // 目录复制
+    private void copyDir(File srcDir, File destDir) throws Exception {
         if ( !srcDir.exists() || !srcDir.isDirectory() )
             throw new Exception("resource_path \"" + srcDir + "\" not found.");
 
@@ -68,110 +86,195 @@ public class RunMojo extends AbstractUbsiMojo {
         }
     }
 
-    Map<String,String> configMap = new HashMap<>();     // 有配置参数的服务/过滤器
-
-    Module dealModule(Config.Filter filter, Info.Lib lib, String name, File modulePath) throws Exception {
+    // 处理模块
+    private Module dealModule(Config.Service srv, Info.Lib lib, File modulePath) throws Exception {
         Module module = new Module();
-        module.class_name = Util.checkEmpty(filter.className);
-        if ( module.class_name == null )
-            throw new Exception((name == null ? "filter" : name) + "'s <className> is empty in <configuration> of pom.xml.");
+        module.class_name = srv.className;
         module.jar_lib = new Info.GAV(lib.groupId, lib.artifactId, lib.version);
-        String config = Util.checkEmpty(filter.configJson);
+        String name = srv.name == null ? srv.className : srv.name;
+        String config = Util.checkEmpty(srv.configJson);
         if ( config != null ) {
             module.startup = false;
             configMap.put(name, config);
         } else
             module.startup = true;
-        if ( Util.checkEmpty(filter.resourcePath) != null )
-            copyDir(new File(filter.resourcePath), new File(modulePath, name));// 复制资源文件
+        if ( Util.checkEmpty(srv.resourcePath) != null )
+            copyDir(new File(srv.resourcePath), new File(modulePath, name));    // 复制资源文件
         return module;
     }
 
-    public void execute() throws MojoExecutionException {
-        prepare();
-
-        // 处理依赖的JAR包
-        List<Info.Lib> libs = new ArrayList<>();
-        Set<Artifact> artifacts = project.getArtifacts();
-        for ( Artifact artifact : artifacts ) {
-            if ( isSysLib(artifact.getGroupId(), artifact.getArtifactId()) )
-                continue;
-            libs.add(artifact2Lib(artifact, true));
-        }
-        // 处理本项目的JAR包
-        Info.Lib lib = artifact2Lib(project.getArtifact(), false);
-        lib.jarFile = jarFile.getName();
-        if ( !libs.isEmpty() ) {
-            int len = libs.size();
-            lib.depends = new Info.GAV[len];
-            for ( int i = 0; i < len; i ++ ) {
-                Info.Lib gav = libs.get(i);
-                lib.depends[i] = new Info.GAV(gav.groupId, gav.artifactId, gav.version);
+    // 添加一个core依赖包，保留更高的version
+    private void addCore(Set<Artifact> core, Artifact artifact) {
+        Artifact jar = null;
+        boolean is_ubsi_core = isUbsiCore(artifact.getArtifactId());
+        for ( Artifact art : core ) {
+            if ( is_ubsi_core && isUbsiCore(art.getArtifactId()) ) {
+                jar = art;
+                break;
+            }
+            if ( art.getGroupId().equals(artifact.getGroupId()) && art.getArtifactId().equals(artifact.getArtifactId()) ) {
+                jar = art;
+                break;
             }
         }
-        libs.add(lib);
+        if ( jar == null ) {
+            core.add(artifact);
+            return;
+        }
+
+        int compare = artifact.getVersion().compareTo(jar.getVersion());
+        if ( is_ubsi_core ) {
+            if ( compare < 0 )
+                return;
+            if ( compare == 0 ) {
+                if ( artifact.getArtifactId().equals(jar.getArtifactId()) )
+                    return;
+                if ( jar.getArtifactId().contains("rewin") )
+                    return;
+            }
+        } else if ( compare <= 0 )
+            return;
+        core.remove(jar);
+        core.add(artifact);
+    }
+
+    // 处理JAR包及依赖关系
+    private void dealDependency() throws MojoExecutionException {
+        Set<Artifact> core = new HashSet<>();
+        for ( Artifact artifact : project.getArtifacts() )
+            if ( isSysLib(artifact.getGroupId(), artifact.getArtifactId()) )
+                addCore(core, artifact);
+
+        Set<Info.Lib> all = new HashSet<>();
+        Set<File> jars = new HashSet<>();
+        for ( Config.Service srv : services ) {
+            Set<Artifact> deps = getDependency(srv);
+            List<Info.Lib> libs = new ArrayList<>();
+            // 处理依赖的JAR包
+            for ( Artifact artDep : deps ) {
+                if ( isSysLib(artDep.getGroupId(), artDep.getArtifactId()) ) {
+                    addCore(core, artDep);
+                    continue;
+                }
+                File jarDep = checkArtifact(artDep);
+                Info.Lib libDep = artifact2Lib(artDep, jarDep);
+                if ( !all.contains(libDep) ) {
+                    all.add(libDep);
+                    jars.add(jarDep);
+                }
+                libs.add(libDep);
+            }
+            // 处理服务的JAR包
+            Artifact artSrv = getArtifact(srv);
+            File jarSrv = checkArtifact(artSrv);
+            Info.Lib libSrv = artifact2Lib(artSrv, jarSrv);
+            if ( !libs.isEmpty() ) {
+                int len = libs.size();
+                libSrv.depends = new Info.GAV[len];
+                for ( int i = 0; i < len; i ++ ) {
+                    Info.Lib gav = libs.get(i);
+                    libSrv.depends[i] = new Info.GAV(gav.groupId, gav.artifactId, gav.version);
+                }
+            }
+            all.add(libSrv);
+            jars.add(jarSrv);
+        }
+
         // 保存JAR包依赖关系
         try {
-            Util.saveJsonFile(new File(LIB_FILE), libs);
+            Util.saveJsonFile(new File(dir, LIB_FILE), all);
         } catch (Exception e) {
-            throw new MojoExecutionException("save " + LIB_FILE + " error, " + e);
+            throw new MojoExecutionException("save \"" + LIB_FILE + "\" error", e);
         }
 
         // 复制JAR包到LIB目录
         try {
-            File libDir = new File(LIB_PATH);
+            File libDir = new File(dir, LIB_PATH);
             Util.rmdir(libDir);
-            libDir.mkdir();
-            File sysDir = new File(SYS_PATH);
+            libDir.mkdirs();
+            for ( File f : jars )
+                Files.copy(f.toPath(), new File(libDir, f.getName()).toPath());
+            File sysDir = new File(dir, SYS_PATH);
             Util.rmdir(sysDir);
-            sysDir.mkdir();
-            for ( Artifact artifact : artifacts ) {
-                File file = checkArtifact(artifact);
-                if ( isSysLib(artifact.getGroupId(), artifact.getArtifactId()) )
-                    Files.copy(file.toPath(), new File(sysDir, file.getName()).toPath());
-                else
-                    Files.copy(file.toPath(), new File(libDir, file.getName()).toPath());
+            sysDir.mkdirs();
+            for ( Artifact artifact : core ) {
+                File f = checkArtifact(artifact);
+                Files.copy(f.toPath(), new File(sysDir, f.getName()).toPath());
             }
-            Files.copy(jarFile.toPath(), new File(libDir, jarFile.getName()).toPath());
+        } catch (MojoExecutionException e) {
+            throw e;
         } catch (Exception e) {
-            if ( e instanceof MojoExecutionException )
-                throw (MojoExecutionException)e;
-            throw new MojoExecutionException("copy jar file error, " + e);
+            throw new MojoExecutionException("copy jar file error", e);
         }
 
         // 设置容器需要加载的模块
         try {
-            File modulePath = new File(MODULE_PATH);
+            File modulePath = new File(dir, MODULE_PATH);
             Util.rmdir(modulePath);
 
             Modules modules = new Modules();
-            if ( !services.isEmpty() ) {
-                modules.services = new HashMap<>();
-                for ( Config.Service service : services ) {
-                    String name = Util.checkEmpty(service.name);
-                    if ( name == null )
-                        throw new MojoExecutionException("service's name is empty in <configuration> of pom.xml.");
-                    Module module = dealModule(service, lib, name, modulePath);
-                    modules.services.put(name, module);
-                }
-            }
-            if ( !filters.isEmpty() ) {
-                modules.filters = new ArrayList<>();
-                for ( Config.Filter filter : filters ) {
-                    Module module = dealModule(filter, lib, Util.checkEmpty(filter.className), modulePath);
+            for ( Config.Service srv : services ) {
+                if ( srv.name != null && modules.services == null )
+                    modules.services = new HashMap<>();
+                else if ( srv.name == null && modules.filters == null )
+                    modules.filters = new ArrayList<>();
+                Module module = dealModule(srv, artifact2Lib(getArtifact(srv), null), modulePath);
+                if ( srv.name != null ) {
+                    if ( modules.services == null )
+                        modules.services = new HashMap<>();
+                    modules.services.put(srv.name, module);
+                } else {
+                    if ( modules.filters == null )
+                        modules.filters = new ArrayList<>();
                     modules.filters.add(module);
                 }
             }
-            Util.saveJsonFile(new File(MODULE_FILE), modules);
+            Util.saveJsonFile(new File(dir, MODULE_FILE), modules);
         } catch (Exception e) {
-            throw new MojoExecutionException("deal module error, " + e);
+            throw new MojoExecutionException("deal module error", e);
         }
+    }
+
+    // 处理配置文件
+    private void dealConfigFile() throws MojoExecutionException {
+        File[] cfgFiles = new File[] {
+                new File(CONSUMER_FILE),
+                new File(ROUTER_FILE),
+                new File(LOG_FILE),
+                new File(CONTAINER_FILE),
+                new File(ACL_FILE)
+        };
+        for ( File f : cfgFiles ) {
+            try {
+                if (checkFile(f))
+                    Files.copy(f.toPath(), new File(dir, f.getName()).toPath());
+            } catch (Exception e) {
+                throw new MojoExecutionException("copy \"" + f.getName() + "\" to \"" + dir + "\" error", e);
+            }
+        }
+    }
+
+    /** 模块运行 */
+    public void execute() throws MojoExecutionException {
+        prepare();
+
+        dir = Util.checkEmpty(dir);
+        if ( dir == null )
+            dir = RUN_PATH;
+
+        dealDependency();
+        dealConfigFile();
 
         System.out.println("\n====== start ubsi-container, press CTRL-C to exit ======\n");
 
         try {
-            ProcessBuilder builder = new ProcessBuilder("java", "-cp", SYS_PATH + File.separator + "*", "rewin.ubsi.container.Bootstrap");
+            ProcessBuilder builder;
+            if ( port == 0 )
+                builder = new ProcessBuilder("java", "-cp", SYS_PATH + File.separator + "*", "rewin.ubsi.container.Bootstrap");
+            else
+                builder = new ProcessBuilder("java", "-cp", SYS_PATH + File.separator + "*", "-Dubsi.port=" + port, "rewin.ubsi.container.Bootstrap");
             builder.redirectErrorStream(true);
+            builder.directory(new File(dir));
             process = builder.start();
         } catch (Exception e) {
             throw new MojoExecutionException("start container error, " + e);
@@ -196,7 +299,6 @@ public class RunMojo extends AbstractUbsiMojo {
                 while ( process.isAlive() )
                     try { Thread.sleep(100); } catch (Exception e) {}
             }
-            clearRun();
             if ( status == 0 )
                 System.out.println("\n====== ubsi-container not start ======\n");
             else
@@ -204,20 +306,8 @@ public class RunMojo extends AbstractUbsiMojo {
         }));
 
         try { process.waitFor(); } catch (Exception e) {}
-        clearRun();
         throw new MojoExecutionException("ubsi-container start error!");
     }
-
-    // 容器退出后，清理生成的目录及文件
-    void clearRun() {
-        try { Util.rmdir(new File(LIB_PATH)); } catch (Exception e) {}
-        try { Util.rmdir(new File(SYS_PATH)); } catch (Exception e) {}
-        try { new File(LIB_FILE).deleteOnExit(); } catch (Exception e) {}
-    }
-
-    Process process;    // 容器的运行进程
-    int status = 0;     // 容器是否已经启动
-    int port = 7112;    // 容器的监听端口
 
     // 检查ubsi-contianer的日志输出，获得监听端口
     void checkOutput(String s) {

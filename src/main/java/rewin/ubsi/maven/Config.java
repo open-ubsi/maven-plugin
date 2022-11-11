@@ -5,6 +5,7 @@ public class Config {
 
     /** 过滤器的参数 */
     public static class Filter {
+        public String artifact;             // 依赖项的ArtifactId
         public String className;            // 模块的类名
         public String configJson;           // 模块配置
         public String resourcePath;         // 模块的资源文件路径

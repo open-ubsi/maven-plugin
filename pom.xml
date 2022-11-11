@@ -6,7 +6,7 @@
 
   <groupId>com.rewin</groupId>
   <artifactId>ubsi-maven-plugin</artifactId>
-  <version>1.0.0</version>
+  <version>1.1.0</version>
   <packaging>maven-plugin</packaging>
 
   <properties>
@@ -29,6 +29,10 @@ UBSI-Maven插件，用于部署/运行微服务
 ```
 1.0.0   2022/09/13
     ~   初始创建
+1.1.0   2022/11/03
+    +   mvn ubsi:run 命令增加了 -Dport={监听端口} -Ddir={目标目录} 参数
+    +   run/deploy 命令增加了 -Dclass={微服务/过滤器的className} 参数
+    +   微服务/过滤器的配置项增加了<artifact>dependency_artifactId</artifact>，可以部署/运行其他微服务
 ```
   -->
 
@@ -50,6 +54,12 @@ UBSI-Maven插件，用于部署/运行微服务
       <artifactId>maven-plugin-annotations</artifactId>
       <version>3.6.4</version>
       <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.maven.shared</groupId>
+      <artifactId>maven-dependency-tree</artifactId>
+      <version>3.2.0</version>
+      <!--<scope>provided</scope>-->
     </dependency>
 
     <dependency>
