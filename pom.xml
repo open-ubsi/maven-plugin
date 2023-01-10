@@ -6,7 +6,7 @@
 
   <groupId>com.rewin</groupId>
   <artifactId>ubsi-maven-plugin</artifactId>
-  <version>1.1.0</version>
+  <version>1.1.1</version>
   <packaging>maven-plugin</packaging>
 
   <properties>
@@ -33,6 +33,8 @@ UBSI-Maven插件，用于部署/运行微服务
     +   mvn ubsi:run 命令增加了 -Dport={监听端口} -Ddir={目标目录} 参数
     +   run/deploy 命令增加了 -Dclass={微服务/过滤器的className} 参数
     +   微服务/过滤器的配置项增加了<artifact>dependency_artifactId</artifact>，可以部署/运行其他微服务
+1.1.1   2023/01/09
+    ~   修复了ubsi:run复制文件时的问题
 ```
   -->
 

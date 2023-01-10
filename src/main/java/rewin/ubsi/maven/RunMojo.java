@@ -12,6 +12,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 
 /**
@@ -76,8 +77,8 @@ public class RunMojo extends AbstractUbsiMojo {
         if ( !srcDir.exists() || !srcDir.isDirectory() )
             throw new Exception("resource_path \"" + srcDir + "\" not found.");
 
-        if ( !destDir.exists() )
-            destDir.mkdirs();
+        Util.rmdir(destDir);
+        destDir.mkdirs();
         for ( File file : srcDir.listFiles() ) {
             if ( file.isDirectory() )
                 copyDir(file, new File(destDir, file.getName()));
@@ -247,7 +248,7 @@ public class RunMojo extends AbstractUbsiMojo {
         for ( File f : cfgFiles ) {
             try {
                 if (checkFile(f))
-                    Files.copy(f.toPath(), new File(dir, f.getName()).toPath());
+                    Files.copy(f.toPath(), new File(dir, f.getName()).toPath(), StandardCopyOption.REPLACE_EXISTING);
             } catch (Exception e) {
                 throw new MojoExecutionException("copy \"" + f.getName() + "\" to \"" + dir + "\" error", e);
             }
@@ -256,6 +257,8 @@ public class RunMojo extends AbstractUbsiMojo {
 
     /** 模块运行 */
     public void execute() throws MojoExecutionException {
+        System.out.println("\n> mvn ubsi:run -Dport={listener_port} -Ddir={run_path} -Dclass={module_className}");
+
         prepare();
 
         dir = Util.checkEmpty(dir);
@@ -265,14 +268,22 @@ public class RunMojo extends AbstractUbsiMojo {
         dealDependency();
         dealConfigFile();
 
-        System.out.println("\n====== start ubsi-container, press CTRL-C to exit ======\n");
+        System.out.println("\n====== start ubsi-container, press CTRL-C to exit ======");
 
         try {
+            String cmd;
             ProcessBuilder builder;
-            if ( port == 0 )
+            if ( port == 0 ) {
                 builder = new ProcessBuilder("java", "-cp", SYS_PATH + File.separator + "*", "rewin.ubsi.container.Bootstrap");
-            else
+                cmd = "java -cp " + SYS_PATH + File.separator + "* rewin.ubsi.container.Bootstrap";
+            } else {
                 builder = new ProcessBuilder("java", "-cp", SYS_PATH + File.separator + "*", "-Dubsi.port=" + port, "rewin.ubsi.container.Bootstrap");
+                cmd = "java -cp " + SYS_PATH + File.separator + "* -Dubsi.port=" + port + "rewin.ubsi.container.Bootstrap";
+            }
+
+            System.out.println("    > cd " + dir);
+            System.out.println("    > " + cmd + "\n");
+
             builder.redirectErrorStream(true);
             builder.directory(new File(dir));
             process = builder.start();

@@ -31,7 +31,7 @@ UBSI-Maven插件，可以部署或运行微服务。
         <plugin>
             <groupId>com.rewin</groupId>
             <artifactId>ubsi-maven-plugin</artifactId>
-            <version>1.0.0</version>
+            <version>1.1.1</version>
             <configuration>     <!-- 插件的配置参数 -->
                 <services>      <!-- 本项目包含的微服务 -->
                     <service>

@@ -34,6 +34,8 @@ public class DeployMojo extends AbstractUbsiMojo {
     int port = Bootstrap.DEFAULT_PORT;
 
     public void execute() throws MojoExecutionException {
+        System.out.println("\n> mvn ubsi:deploy -Dcontainer={host_name#listener_port} -Dclass={module_className}\n");
+
         prepare();
 
         container = Util.checkEmpty(container);
@@ -51,7 +53,6 @@ public class DeployMojo extends AbstractUbsiMojo {
                 host = container;
         }
 
-        getLog().info("");
         getLog().info("====== start deploy, container=\"" + host + "#" + port + "\" ======");
         try {
             Context.startup(".");
@@ -65,7 +66,7 @@ public class DeployMojo extends AbstractUbsiMojo {
         } finally {
             try { Context.shutdown(); } catch (Exception e) {}
         }
-        getLog().info("");
+        System.out.println();
     }
 
     /* 部署一个微服务/过滤器 */
